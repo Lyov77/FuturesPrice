@@ -1,0 +1,6 @@
+@FuturesPrice.WebAPI_HostAddress = http://localhost:5248
+
+GET {{FuturesPrice.WebAPI_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
