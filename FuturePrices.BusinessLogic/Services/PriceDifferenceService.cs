@@ -1,7 +1,8 @@
-﻿using FuturesPrice.Binance.Interfaces;
+﻿using Serilog;
 using FuturesPrice.BusinessLogic.Interfaces;
-using FuturesPrice.DAL.Interfaces;
 using FuturesPrice.Shared.Models;
+using FuturesPrice.DAL.Interfaces;
+using FuturesPrice.Binance.Interfaces;
 
 namespace FuturesPrice.BusinessLogic.Services
 {
@@ -9,53 +10,77 @@ namespace FuturesPrice.BusinessLogic.Services
     {
         private readonly IBinanceService _binanceService;
         private readonly IPriceRepository _priceRepository;
+        private readonly ILoggingService _loggingService;
 
-        public PriceDifferenceService(IBinanceService binanceService, IPriceRepository priceRepository)
+        public PriceDifferenceService(IBinanceService binanceService, IPriceRepository priceRepository, ILoggingService loggingService)
         {
             _binanceService = binanceService;
             _priceRepository = priceRepository;
+            _loggingService = loggingService;
         }
 
         public async Task<PriceDifferenceDto> CalculatePriceDifferenceAsync(string symbol, DateTime startDate, DateTime endDate)
         {
-            // startDate и endDate в UTC
-            var startDateUtc = new DateTimeOffset(startDate).ToUniversalTime();
-            var endDateUtc = new DateTimeOffset(endDate).ToUniversalTime();
-
-            // Получаем цены за предыдущие и текущие даты
-            var prices = await _priceRepository.GetPricesAsync(symbol, startDateUtc.DateTime, endDateUtc.DateTime);
-
-            // Если цены за начальный промежуток отсутствуют, получаем их с Binance
-            decimal priceStart = prices.FirstOrDefault(p => p.StartDate == startDateUtc)?.PriceDifference
-                ?? await _binanceService.GetFuturePriceAsync(symbol, startDate);
-
-            decimal priceEnd = prices.FirstOrDefault(p => p.EndDate == endDateUtc)?.PriceDifference
-                ?? await _binanceService.GetFuturePriceAsync(symbol, endDate);
-
-            // Если цены за конец промежутка отсутствуют, используем цену за предыдущий день
-            if (priceEnd == 0)
+            try
             {
-                var lastPrice = await _priceRepository.GetPricesAsync(symbol, endDateUtc.AddDays(-1).DateTime, endDateUtc.DateTime);
-                priceEnd = lastPrice?.LastOrDefault()?.PriceDifference ?? priceStart; // Используем цену за предыдущий день
+                await _loggingService.LogInfoAsync($"Начало расчета разницы цен для {symbol} с {startDate} по {endDate}");
+
+                // Validate symbol format (example: should be uppercase, alphanumeric)
+                if (string.IsNullOrEmpty(symbol) || !symbol.All(char.IsLetterOrDigit) || symbol.Length < 2)
+                {
+                    var errorMessage = $"Некорректный символ: {symbol}";
+                    await _loggingService.LogErrorAsync(errorMessage);
+                    throw new ArgumentException(errorMessage);
+                }
+
+                // Validate date format
+                if (startDate > endDate)
+                {
+                    var errorMessage = $"Начальная дата ({startDate}) не может быть позже конечной даты ({endDate})";
+                    await _loggingService.LogErrorAsync(errorMessage);
+                    throw new ArgumentException(errorMessage);
+                }
+
+                var startDateUtc = new DateTimeOffset(startDate).ToUniversalTime();
+                var endDateUtc = new DateTimeOffset(endDate).ToUniversalTime();
+
+                var prices = await _priceRepository.GetPricesAsync(symbol, startDateUtc.DateTime, endDateUtc.DateTime);
+
+                decimal priceStart = await _binanceService.GetFuturePriceAsync(symbol, startDate);
+
+                decimal priceEnd = await _binanceService.GetFuturePriceAsync(symbol, endDate);
+
+                if (priceEnd == 0)
+                {
+                    var lastPrice = await _priceRepository.GetPricesAsync(symbol, endDateUtc.AddDays(-1).DateTime, endDateUtc.DateTime);
+                    priceEnd = lastPrice?.LastOrDefault()?.PriceDifference ?? priceStart;
+                }
+
+                var priceDifference = priceEnd - priceStart;
+
+                // Log the success of price difference calculation
+                await _loggingService.LogInfoAsync($"Ценовая разница для {symbol} с {startDate} по {endDate} равна {priceDifference}");
+
+                await _priceRepository.SavePriceAsync(new FuturesPriceModel
+                {
+                    Symbol = symbol,
+                    StartDate = startDateUtc,
+                    EndDate = endDateUtc,
+                    PriceDifference = priceDifference
+                });
+
+                return new PriceDifferenceDto
+                {
+                    StartDate = startDateUtc,
+                    EndDate = endDateUtc,
+                    PriceDifference = priceDifference
+                };
             }
-
-            var priceDifference = priceEnd - priceStart;
-
-            // Сохраняем цены в базу данных
-            await _priceRepository.SavePriceAsync(new FuturesPriceModel
+            catch (Exception ex)
             {
-                Symbol = symbol,
-                StartDate = startDateUtc,
-                EndDate = endDateUtc,
-                PriceDifference = priceDifference
-            });
-
-            return new PriceDifferenceDto
-            {
-                StartDate = startDateUtc,
-                EndDate = endDateUtc,
-                PriceDifference = priceDifference
-            };
+                await _loggingService.LogErrorAsync($"Ошибка при расчете разницы цен для {symbol} с {startDate} по {endDate}", ex);
+                throw;
+            }
         }
     }
 }

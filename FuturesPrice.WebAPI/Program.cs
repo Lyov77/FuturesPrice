@@ -1,3 +1,5 @@
+using Serilog;
+using Serilog.Events;
 using FuturesPrice.Binance.Interfaces;
 using FuturesPrice.Binance.Services;
 using FuturesPrice.BusinessLogic.Interfaces;
@@ -7,12 +9,21 @@ using FuturesPrice.DAL;
 using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
 using FuturesPrice.BusinessLogic.Services;
+using Serilog.Sinks.PostgreSQL;
 
 var builder = WebApplication.CreateBuilder(args);
 
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Debug()
+    .WriteTo.Console()
+    .WriteTo.File("logs/log-.txt", rollingInterval: RollingInterval.Day)
+    .WriteTo.PostgreSQL(
+        connectionString: builder.Configuration.GetConnectionString("PostgreSqlConnection"),
+        tableName: "LogEntries")
+    .CreateLogger();
 
 // Connection string configuration. 
-string dbConnectionString = builder.Configuration.GetConnectionString("PostgreSqlConnection"); // "PostgreSqlConnection" and "SqlServerConnection"
+string dbConnectionString = builder.Configuration.GetConnectionString("PostgreSqlConnection"); // "PostgreSqlConnection" è "SqlServerConnection"
 
 
 
@@ -22,6 +33,10 @@ builder.Services.AddHttpClient();
 builder.Services.AddScoped<IBinanceService, BinanceService>();
 builder.Services.AddScoped<IPriceRepository, PriceRepository>();
 builder.Services.AddScoped<IPriceDifferenceService, PriceDifferenceService>();
+builder.Services.AddScoped<ILogRepository, LogRepository>();
+builder.Services.AddScoped<ILoggingService, LoggingService>(); 
+
+
 
 
 if (dbConnectionString.Contains("Server"))
@@ -40,7 +55,11 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+builder.Host.UseSerilog();  
+
 var app = builder.Build();
+
+app.UseSerilogRequestLogging();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
