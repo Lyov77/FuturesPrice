@@ -1,86 +1,65 @@
-﻿using Serilog;
-using FuturesPrice.BusinessLogic.Interfaces;
-using FuturesPrice.Shared.Models;
+﻿using FuturesPrice.BusinessLogic.Interfaces;
 using FuturesPrice.DAL.Interfaces;
-using FuturesPrice.Binance.Interfaces;
+using FuturesPrice.Shared.Models;
 
-namespace FuturesPrice.BusinessLogic.Services
+public class PriceDifferenceService : IPriceDifferenceService
 {
-    public class PriceDifferenceService : IPriceDifferenceService
+    private readonly IPriceDifferenceValidator _validator;
+    private readonly IPriceDifferenceCalculator _calculator;
+    private readonly IPriceSaveRepository _priceSaveRepository;
+    private readonly ILoggingService _loggingService;
+
+    public PriceDifferenceService(
+        IPriceDifferenceValidator validator,
+        IPriceDifferenceCalculator calculator,
+        IPriceSaveRepository priceSaveRepository,
+        ILoggingService loggingService)
     {
-        private readonly IBinanceService _binanceService;
-        private readonly IPriceRepository _priceRepository;
-        private readonly ILoggingService _loggingService;
+        _validator = validator;
+        _calculator = calculator;
+        _priceSaveRepository = priceSaveRepository;
+        _loggingService = loggingService;
+    }
 
-        public PriceDifferenceService(IBinanceService binanceService, IPriceRepository priceRepository, ILoggingService loggingService)
+    public async Task<PriceDifferenceDto> CalculatePriceDifferenceAsync(string symbol, DateTime startDate, DateTime endDate)
+    {
+        try
         {
-            _binanceService = binanceService;
-            _priceRepository = priceRepository;
-            _loggingService = loggingService;
+            await _loggingService.LogInfoAsync($"Начало расчета разницы цен для {symbol} с {startDate} по {endDate}");
+
+            // symbol and date validation
+            _validator.ValidateSymbol(symbol);
+            _validator.ValidateDateRange(startDate, endDate);
+
+            var startDateUtc = new DateTimeOffset(startDate).ToUniversalTime();
+            var endDateUtc = new DateTimeOffset(endDate).ToUniversalTime();
+
+            // price difference calculation
+            var priceDifference = await _calculator.CalculateAsync(symbol, startDate, endDate);
+                      
+                        
+            await _priceSaveRepository.SavePriceAsync(new FuturesPriceModel
+            {
+                Symbol = symbol,
+                StartDate = startDateUtc,
+                EndDate = endDateUtc,
+                PriceDifference = priceDifference
+            });
+            
+            // logging successful result
+            await _loggingService.LogInfoAsync($"Ценовая разница для {symbol} с {startDate} по {endDate} равна {priceDifference}");
+
+            return new PriceDifferenceDto
+            {
+                StartDate = startDateUtc,
+                EndDate = endDateUtc,
+                PriceDifference = priceDifference
+            };
         }
-
-        public async Task<PriceDifferenceDto> CalculatePriceDifferenceAsync(string symbol, DateTime startDate, DateTime endDate)
+        catch (Exception ex)
         {
-            try
-            {
-                await _loggingService.LogInfoAsync($"Начало расчета разницы цен для {symbol} с {startDate} по {endDate}");
-
-                // Validate symbol format (example: should be uppercase, alphanumeric)
-                if (string.IsNullOrEmpty(symbol) || !symbol.All(char.IsLetterOrDigit) || symbol.Length < 2)
-                {
-                    var errorMessage = $"Некорректный символ: {symbol}";
-                    await _loggingService.LogErrorAsync(errorMessage);
-                    throw new ArgumentException(errorMessage);
-                }
-
-                // Validate date format
-                if (startDate > endDate)
-                {
-                    var errorMessage = $"Начальная дата ({startDate}) не может быть позже конечной даты ({endDate})";
-                    await _loggingService.LogErrorAsync(errorMessage);
-                    throw new ArgumentException(errorMessage);
-                }
-
-                var startDateUtc = new DateTimeOffset(startDate).ToUniversalTime();
-                var endDateUtc = new DateTimeOffset(endDate).ToUniversalTime();
-
-                var prices = await _priceRepository.GetPricesAsync(symbol, startDateUtc.DateTime, endDateUtc.DateTime);
-
-                decimal priceStart = await _binanceService.GetFuturePriceAsync(symbol, startDate);
-
-                decimal priceEnd = await _binanceService.GetFuturePriceAsync(symbol, endDate);
-
-                if (priceEnd == 0)
-                {
-                    var lastPrice = await _priceRepository.GetPricesAsync(symbol, endDateUtc.AddDays(-1).DateTime, endDateUtc.DateTime);
-                    priceEnd = lastPrice?.LastOrDefault()?.PriceDifference ?? priceStart;
-                }
-
-                var priceDifference = priceEnd - priceStart;
-
-                // Log the success of price difference calculation
-                await _loggingService.LogInfoAsync($"Ценовая разница для {symbol} с {startDate} по {endDate} равна {priceDifference}");
-
-                await _priceRepository.SavePriceAsync(new FuturesPriceModel
-                {
-                    Symbol = symbol,
-                    StartDate = startDateUtc,
-                    EndDate = endDateUtc,
-                    PriceDifference = priceDifference
-                });
-
-                return new PriceDifferenceDto
-                {
-                    StartDate = startDateUtc,
-                    EndDate = endDateUtc,
-                    PriceDifference = priceDifference
-                };
-            }
-            catch (Exception ex)
-            {
-                await _loggingService.LogErrorAsync($"Ошибка при расчете разницы цен для {symbol} с {startDate} по {endDate}", ex);
-                throw;
-            }
+            await _loggingService.LogErrorAsync($"Ошибка при расчете разницы цен для {symbol} с {startDate} по {endDate}", ex);
+            throw;
         }
     }
 }

@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FuturesPrice.DAL.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20250407102950_exceptions-nullable")]
-    partial class exceptionsnullable
+    [Migration("20250407162730_Initial")]
+    partial class Initial
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -68,9 +68,6 @@ namespace FuturesPrice.DAL.Migrations
 
                     b.Property<string>("Message")
                         .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Properties")
                         .HasColumnType("text");
 
                     b.Property<DateTime>("Timestamp")

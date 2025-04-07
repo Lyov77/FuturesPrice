@@ -1,6 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
-
-namespace FuturesPrice.Shared.Models
+﻿namespace FuturesPrice.Shared.Models
 {
     public class LogEntry
     {
@@ -8,6 +6,6 @@ namespace FuturesPrice.Shared.Models
         public DateTime Timestamp { get; set; }
         public required string Level { get; set; }
         public required string Message { get; set; }
-        public string Exception { get; set; }
+        public string Exception { get; set; } = string.Empty;
     }
 }

@@ -1,6 +1,5 @@
 ﻿using FuturesPrice.DAL.Interfaces;
 using FuturesPrice.Shared.Models;
-using Microsoft.EntityFrameworkCore;
 
 namespace FuturesPrice.DAL.Services
 {
@@ -15,8 +14,16 @@ namespace FuturesPrice.DAL.Services
 
         public async Task SaveLogAsync(LogEntry log)
         {
-            _context.LogEntries.Add(log);
-            await _context.SaveChangesAsync();
+            try
+            {
+                _context.LogEntries.Add(log);
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("Error saving log entry to the database", ex);
+            }
         }
+
     }
 }

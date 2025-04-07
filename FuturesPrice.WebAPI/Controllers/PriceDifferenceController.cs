@@ -18,15 +18,14 @@ namespace FuturesPrice.API.Controllers
         [HttpGet("calculate")]
         public async Task<IActionResult> CalculatePriceDifference(string symbol, DateTime startDate, DateTime endDate)
         {
-            try
-            {
-                var priceDifference = await _priceDifferenceService.CalculatePriceDifferenceAsync(symbol, startDate, endDate);
+            
+            var priceDifference = await _priceDifferenceService.CalculatePriceDifferenceAsync(symbol, startDate, endDate);
+                
+            if (priceDifference != null)
                 return Ok(priceDifference);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"Internal server error: {ex.Message}");
-            }
+                
+            return StatusCode(500, $"Internal server error");
+            
         }
     }
 }
