@@ -37,8 +37,7 @@ namespace FuturesPrice.BusinessLogic.Services
                 Timestamp = DateTime.UtcNow,
                 Level = level,
                 Message = message,
-                Exception = exception,
-                Properties = null
+                Exception = exception
             };
 
             await _logRepository.SaveLogAsync(logEntry);

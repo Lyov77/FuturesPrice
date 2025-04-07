@@ -1,3 +1,5 @@
+using Hangfire;
+using Hangfire.PostgreSql;
 using Serilog;
 using Serilog.Events;
 using FuturesPrice.Binance.Interfaces;
@@ -22,10 +24,8 @@ Log.Logger = new LoggerConfiguration()
         tableName: "LogEntries")
     .CreateLogger();
 
-// Connection string configuration. 
-string dbConnectionString = builder.Configuration.GetConnectionString("PostgreSqlConnection"); // "PostgreSqlConnection" è "SqlServerConnection"
-
-
+builder.Services.AddDbContext<AppDbContext>(options =>
+        options.UseNpgsql(builder.Configuration.GetConnectionString("PostgreSqlConnection")));
 
 // Add services to the container.
 
@@ -34,21 +34,8 @@ builder.Services.AddScoped<IBinanceService, BinanceService>();
 builder.Services.AddScoped<IPriceRepository, PriceRepository>();
 builder.Services.AddScoped<IPriceDifferenceService, PriceDifferenceService>();
 builder.Services.AddScoped<ILogRepository, LogRepository>();
-builder.Services.AddScoped<ILoggingService, LoggingService>(); 
+builder.Services.AddScoped<ILoggingService, LoggingService>();
 
-
-
-
-if (dbConnectionString.Contains("Server"))
-{
-    builder.Services.AddDbContext<AppDbContext>(options =>
-        options.UseSqlServer(dbConnectionString)); // SQL Server
-}
-else
-{
-    builder.Services.AddDbContext<AppDbContext>(options =>
-        options.UseNpgsql(dbConnectionString)); // PostgreSQL
-}
 
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle

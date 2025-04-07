@@ -26,10 +26,6 @@ namespace FuturesPrice.DAL
                 .IsRequired();
 
             modelBuilder.Entity<LogEntry>()
-                .Property(l => l.Properties)
-                .IsRequired(false);  
-
-            modelBuilder.Entity<LogEntry>()
                 .Property(l => l.Exception)
                 .IsRequired(false); 
         }
