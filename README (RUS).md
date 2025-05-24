@@ -70,7 +70,7 @@ Swagger будет доступен по адресу:
 
 ### Endpoint
 
-`POST /api/prices/difference`
+`GET /api/PriceDifference/calculate`
 
 ### Пример запроса в Swagger:
 
